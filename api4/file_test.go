@@ -555,9 +555,9 @@ func TestUploadFiles(t *testing.T) {
 					return
 				}
 
-				if fileResp == nil || len(fileResp.FileInfos) == 0 || len(fileResp.FileInfos) != len(tc.names) {
-					t.Fatal("Empty or mismatched actual or expected FileInfos")
-				}
+				require.NotNil(t, fileResp, "Empty or mismatched actual or expected FileInfos")
+				assert.NotEqual(t, len(fileResp.FileInfos), 0, "Empty or mismatched actual or expected FileInfos")
+				assert.Equal(t, len(fileResp.FileInfos), len(tc.names), "Empty or mismatched actual or expected FileInfos")
 
 				for i, ri := range fileResp.FileInfos {
 					// The returned file info from the upload call will be missing some fields that will be stored in the database
@@ -656,25 +656,20 @@ func TestGetFile(t *testing.T) {
 	fileId := ""
 	var sent []byte
 	var err error
-	if sent, err = testutils.ReadTestFile("test.png"); err != nil {
-		t.Fatal(err)
-	} else {
-		fileResp, resp := Client.UploadFile(sent, channel.Id, "test.png")
-		CheckNoError(t, resp)
+	sent, err = testutils.ReadTestFile("test.png")
+	require.Nil(t, err)
+	fileResp, resp := Client.UploadFile(sent, channel.Id, "test.png")
+	CheckNoError(t, resp)
 
-		fileId = fileResp.FileInfos[0].Id
-	}
+	fileId = fileResp.FileInfos[0].Id
 
 	data, resp := Client.GetFile(fileId)
 	CheckNoError(t, resp)
-
-	if len(data) == 0 {
-		t.Fatal("should not be empty")
-	}
+	assert.NotEqual(t, len(data), 0, "should not be empty")
 
 	for i := range data {
 		if data[i] != sent[i] {
-			t.Fatal("received file didn't match sent one")
+			assert.Equal(t, data[i], sent[i], "received file didn't match sent one")
 		}
 	}
 
@@ -713,30 +708,24 @@ func TestGetFileHeaders(t *testing.T) {
 			_, resp = Client.GetFile(fileId)
 			CheckNoError(t, resp)
 
-			if contentType := resp.Header.Get("Content-Type"); !strings.HasPrefix(contentType, expectedContentType) {
-				t.Fatal("returned incorrect Content-Type", contentType)
-			}
+			contentType := resp.Header.Get("Content-Type")
+			assert.True(t, strings.HasPrefix(contentType, expectedContentType), "returned incorrect Content-Type" + contentType)
 
+			contentDisposition := resp.Header.Get("Content-Disposition")
 			if getInline {
-				if contentDisposition := resp.Header.Get("Content-Disposition"); !strings.HasPrefix(contentDisposition, "inline") {
-					t.Fatal("returned incorrect Content-Disposition", contentDisposition)
-				}
+				assert.True(t, strings.HasPrefix(contentDisposition, "inline"), "returned incorrect Content-Disposition" + contentDisposition)
 			} else {
-				if contentDisposition := resp.Header.Get("Content-Disposition"); !strings.HasPrefix(contentDisposition, "attachment") {
-					t.Fatal("returned incorrect Content-Disposition", contentDisposition)
-				}
+				assert.True(t, strings.HasPrefix(contentDisposition, "attachment"), "returned incorrect Content-Disposition" + contentDisposition)
 			}
 
 			_, resp = Client.DownloadFile(fileId, true)
 			CheckNoError(t, resp)
 
-			if contentType := resp.Header.Get("Content-Type"); !strings.HasPrefix(contentType, expectedContentType) {
-				t.Fatal("returned incorrect Content-Type", contentType)
-			}
+			contentType = resp.Header.Get("Content-Type")
+			assert.True(t, strings.HasPrefix(contentType, expectedContentType), "returned incorrect Content-Type" + contentType)
 
-			if contentDisposition := resp.Header.Get("Content-Disposition"); !strings.HasPrefix(contentDisposition, "attachment") {
-				t.Fatal("returned incorrect Content-Disposition", contentDisposition)
-			}
+			contentDisposition = resp.Header.Get("Content-Disposition")
+			assert.True(t, strings.HasPrefix(contentDisposition, "attachment"), "returned incorrect Content-Disposition" + contentDisposition)
 		}
 	}
 
@@ -771,14 +760,12 @@ func TestGetFileThumbnail(t *testing.T) {
 	fileId := ""
 	var sent []byte
 	var err error
-	if sent, err = testutils.ReadTestFile("test.png"); err != nil {
-		t.Fatal(err)
-	} else {
-		fileResp, resp := Client.UploadFile(sent, channel.Id, "test.png")
-		CheckNoError(t, resp)
+	sent, err = testutils.ReadTestFile("test.png")
+	require.Nil(t, err)
+	fileResp, resp := Client.UploadFile(sent, channel.Id, "test.png")
+	CheckNoError(t, resp)
 
-		fileId = fileResp.FileInfos[0].Id
-	}
+	fileId = fileResp.FileInfos[0].Id
 
 	// Wait a bit for files to ready
 	time.Sleep(2 * time.Second)
@@ -786,9 +773,7 @@ func TestGetFileThumbnail(t *testing.T) {
 	data, resp := Client.GetFileThumbnail(fileId)
 	CheckNoError(t, resp)
 
-	if len(data) == 0 {
-		t.Fatal("should not be empty")
-	}
+	assert.NotEqual(t, len(data), 0, "should not be empty")
 
 	_, resp = Client.GetFileThumbnail("junk")
 	CheckBadRequestStatus(t, resp)
@@ -824,20 +809,19 @@ func TestGetFileLink(t *testing.T) {
 	th.App.UpdateConfig(func(cfg *model.Config) { *cfg.FileSettings.PublicLinkSalt = model.NewRandomString(32) })
 
 	fileId := ""
-	if data, err := testutils.ReadTestFile("test.png"); err != nil {
-		t.Fatal(err)
-	} else {
-		fileResp, resp := Client.UploadFile(data, channel.Id, "test.png")
-		CheckNoError(t, resp)
+	data, err := testutils.ReadTestFile("test.png")
+	require.Nil(t, err)
 
-		fileId = fileResp.FileInfos[0].Id
-	}
+	fileResp, resp := Client.UploadFile(data, channel.Id, "test.png")
+	CheckNoError(t, resp)
 
-	_, resp := Client.GetFileLink(fileId)
+	fileId = fileResp.FileInfos[0].Id
+
+	_, resp = Client.GetFileLink(fileId)
 	CheckBadRequestStatus(t, resp)
 
 	// Hacky way to assign file to a post (usually would be done by CreatePost call)
-	err := th.App.Srv.Store.FileInfo().AttachToPost(fileId, th.BasicPost.Id, th.BasicUser.Id)
+	err = th.App.Srv.Store.FileInfo().AttachToPost(fileId, th.BasicPost.Id, th.BasicUser.Id)
 	require.Nil(t, err)
 
 	th.App.UpdateConfig(func(cfg *model.Config) { *cfg.FileSettings.EnablePublicLink = false })
@@ -851,9 +835,7 @@ func TestGetFileLink(t *testing.T) {
 	link, resp := Client.GetFileLink(fileId)
 	CheckNoError(t, resp)
 
-	if link == "" {
-		t.Fatal("should've received public link")
-	}
+	assert.NotEqual(t, link, "", "should've received public link")
 
 	_, resp = Client.GetFileLink("junk")
 	CheckBadRequestStatus(t, resp)
@@ -892,24 +874,19 @@ func TestGetFilePreview(t *testing.T) {
 	fileId := ""
 	var sent []byte
 	var err error
-	if sent, err = testutils.ReadTestFile("test.png"); err != nil {
-		t.Fatal(err)
-	} else {
-		fileResp, resp := Client.UploadFile(sent, channel.Id, "test.png")
-		CheckNoError(t, resp)
+	sent, err = testutils.ReadTestFile("test.png")
+	require.Nil(t, err)
+	fileResp, resp := Client.UploadFile(sent, channel.Id, "test.png")
+	CheckNoError(t, resp)
 
-		fileId = fileResp.FileInfos[0].Id
-	}
+	fileId = fileResp.FileInfos[0].Id
 
 	// Wait a bit for files to ready
 	time.Sleep(2 * time.Second)
 
 	data, resp := Client.GetFilePreview(fileId)
 	CheckNoError(t, resp)
-
-	if len(data) == 0 {
-		t.Fatal("should not be empty")
-	}
+	assert.NotEqual(t, len(data), 0, "should not be empty")
 
 	_, resp = Client.GetFilePreview("junk")
 	CheckBadRequestStatus(t, resp)
@@ -945,38 +922,26 @@ func TestGetFileInfo(t *testing.T) {
 	fileId := ""
 	var sent []byte
 	var err error
-	if sent, err = testutils.ReadTestFile("test.png"); err != nil {
-		t.Fatal(err)
-	} else {
-		fileResp, resp := Client.UploadFile(sent, channel.Id, "test.png")
-		CheckNoError(t, resp)
+	sent, err = testutils.ReadTestFile("test.png")
+	require.Nil(t, err)
+	fileResp, resp := Client.UploadFile(sent, channel.Id, "test.png")
+	CheckNoError(t, resp)
 
-		fileId = fileResp.FileInfos[0].Id
-	}
+	fileId = fileResp.FileInfos[0].Id
 
 	// Wait a bit for files to ready
 	time.Sleep(2 * time.Second)
 
 	info, resp := Client.GetFileInfo(fileId)
 	CheckNoError(t, resp)
-
-	if err != nil {
-		t.Fatal(err)
-	} else if info.Id != fileId {
-		t.Fatal("got incorrect file")
-	} else if info.CreatorId != user.Id {
-		t.Fatal("file should be assigned to user")
-	} else if info.PostId != "" {
-		t.Fatal("file shouldn't have a post")
-	} else if info.Path != "" {
-		t.Fatal("file path shouldn't have been returned to client")
-	} else if info.ThumbnailPath != "" {
-		t.Fatal("file thumbnail path shouldn't have been returned to client")
-	} else if info.PreviewPath != "" {
-		t.Fatal("file preview path shouldn't have been returned to client")
-	} else if info.MimeType != "image/png" {
-		t.Fatal("mime type should've been image/png")
-	}
+	require.Nil(t, err)
+	assert.Equal(t, info.Id, fileId, "got incorrect file")
+	assert.Equal(t, info.CreatorId, user.Id, "file should be assigned to user")
+	assert.Equal(t, info.PostId, "", "file shouldn't have a post")
+	assert.Equal(t, info.Path, "", "file path shouldn't have been returned to client")
+	assert.Equal(t, info.ThumbnailPath, "", "file thumbnail path shouldn't have been returned to client")
+	assert.Equal(t, info.PreviewPath, "", "file preview path shouldn't have been returned to client")
+	assert.Equal(t, info.MimeType, "image/png", "mime type should've been image/png")
 
 	_, resp = Client.GetFileInfo("junk")
 	CheckBadRequestStatus(t, resp)
@@ -1008,17 +973,15 @@ func TestGetPublicFile(t *testing.T) {
 	th.App.UpdateConfig(func(cfg *model.Config) { *cfg.FileSettings.PublicLinkSalt = model.NewRandomString(32) })
 
 	fileId := ""
-	if data, err := testutils.ReadTestFile("test.png"); err != nil {
-		t.Fatal(err)
-	} else {
-		fileResp, resp := Client.UploadFile(data, channel.Id, "test.png")
-		CheckNoError(t, resp)
+	data, err := testutils.ReadTestFile("test.png")
+	require.Nil(t, err)
+	fileResp, resp := Client.UploadFile(data, channel.Id, "test.png")
+	CheckNoError(t, resp)
 
-		fileId = fileResp.FileInfos[0].Id
-	}
+	fileId = fileResp.FileInfos[0].Id
 
 	// Hacky way to assign file to a post (usually would be done by CreatePost call)
-	err := th.App.Srv.Store.FileInfo().AttachToPost(fileId, th.BasicPost.Id, th.BasicUser.Id)
+	err = th.App.Srv.Store.FileInfo().AttachToPost(fileId, th.BasicPost.Id, th.BasicUser.Id)
 	require.Nil(t, err)
 
 	info, err := th.App.Srv.Store.FileInfo().Get(fileId)
@@ -1028,31 +991,30 @@ func TestGetPublicFile(t *testing.T) {
 	// Wait a bit for files to ready
 	time.Sleep(2 * time.Second)
 
-	if resp, err := http.Get(link); err != nil || resp.StatusCode != http.StatusOK {
-		t.Log(link)
-		t.Fatal("failed to get image with public link", err)
-	}
+	resp1, err := http.Get(link)
+	require.Nil(t, err, "failed to get image with public link", err)
+	assert.Equal(t, resp1.StatusCode, http.StatusOK, "failed to get image with public link", err)
 
-	if resp, err := http.Get(link[:strings.LastIndex(link, "?")]); err == nil && resp.StatusCode != http.StatusBadRequest {
-		t.Fatal("should've failed to get image with public link without hash", resp.Status)
-	}
+	resp2, err := http.Get(link[:strings.LastIndex(link, "?")])
+	require.Nil(t, err, "should've failed to get image with public link without hash" , resp2.Status)
+	assert.Equal(t, resp2.StatusCode, http.StatusBadRequest, "should've failed to get image with public link without hash", resp2.Status)
 
 	th.App.UpdateConfig(func(cfg *model.Config) { *cfg.FileSettings.EnablePublicLink = false })
-	if resp, err := http.Get(link); err == nil && resp.StatusCode != http.StatusNotImplemented {
-		t.Fatal("should've failed to get image with disabled public link")
-	}
+	resp3, err := http.Get(link)
+	require.Nil(t, err, "should've failed to get image with disabled public link")
+	assert.Equal(t, resp3.StatusCode, http.StatusNotImplemented, "should've failed to get image with disabled public link")
 
 	// test after the salt has changed
 	th.App.UpdateConfig(func(cfg *model.Config) { *cfg.FileSettings.EnablePublicLink = true })
 	th.App.UpdateConfig(func(cfg *model.Config) { *cfg.FileSettings.PublicLinkSalt = model.NewRandomString(32) })
 
-	if resp, err := http.Get(link); err == nil && resp.StatusCode != http.StatusBadRequest {
-		t.Fatal("should've failed to get image with public link after salt changed")
-	}
+	resp4, err := http.Get(link)
+	require.Nil(t, err, "should've failed to get image with public link after salt changed")
+	assert.Equal(t, resp4.StatusCode, http.StatusBadRequest, "should've failed to get image with public link after salt changed")
 
-	if resp, err := http.Get(link); err == nil && resp.StatusCode != http.StatusBadRequest {
-		t.Fatal("should've failed to get image with public link after salt changed")
-	}
+	resp5, err := http.Get(link)
+	require.Nil(t, err, "should've failed to get image with public link after salt changed")
+	assert.Equal(t, resp5.StatusCode, http.StatusBadRequest, "should've failed to get image with public link after salt changed")
 
 	fileInfo, err := th.App.Srv.Store.FileInfo().Get(fileId)
 	require.Nil(t, err)
